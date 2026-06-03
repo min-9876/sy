@@ -1,8 +1,4 @@
 
-MisteryDevs
-sy
-Repository navigation
-Code
 
 import asyncio, httpx, os, re, yt_dlp
 from typing import Union
