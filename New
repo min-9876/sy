@@ -1,18 +1,36 @@
 import asyncio, os, yt_dlp
 from typing import Union
+from pyrogram.types import Message
+from pyrogram.enums import MessageEntityType
 
-# --- ဒီနေရာမှာ သင့်ရဲ့ Cookies စာသား အရှည်ကြီးကို ထည့်ပါ ---
+# Cookies စာသားကို Code ထဲတွင် အသေထည့်ရန် (သင်ပြောသလို ပြင်ထားသည်)
 MY_COOKIES_TEXT = """
 # Netscape HTTP Cookie File
-.youtube.com	TRUE	/	TRUE	1749876543	... (သင့် cookies စာသားများကို ဒီမှာ ကူးထည့်ပါ)
+# (သင့်ရဲ့ cookies.txt ပါအကြောင်းအရာအစစ်ကို ဒီနေရာမှာ ကူးထည့်ပါ)
 """
-# ----------------------------------------------------
 
 class YouTubeAPI:
-    # ... (အခြား method များ) ...
+    def __init__(self):
+        self.base = "https://www.youtube.com/watch?v="
 
+    # --- Error တက်နေတဲ့ url method ကို ဒီမှာ ပြန်ထည့်ထားပါတယ် ---
+    async def url(self, message_1: Message) -> Union[str, None]:
+        messages = [message_1]
+        if message_1.reply_to_message:
+            messages.append(message_1.reply_to_message)
+        for message in messages:
+            if message.entities:
+                for entity in message.entities:
+                    if entity.type == MessageEntityType.URL:
+                        return (message.text or message.caption)[entity.offset : entity.offset + entity.length]
+            elif message.caption_entities:
+                for entity in message.caption_entities:
+                    if entity.type == MessageEntityType.TEXT_LINK:
+                        return entity.url
+        return None
+
+    # --- Download method (API မလိုတော့ဘဲ Cookies နဲ့ တိုက်ရိုက်ဒေါင်းမည်) ---
     async def download(self, link, mystic, video=None, **kwargs) -> str:
-        # Code ထဲက Cookies ကို Temporary file အဖြစ် ခဏဖန်တီးမယ်
         cookie_path = "cookies_temp.txt"
         with open(cookie_path, "w") as f:
             f.write(MY_COOKIES_TEXT)
@@ -22,7 +40,7 @@ class YouTubeAPI:
             ydl_opts = {
                 "format": "bestvideo+bestaudio/best" if video else "bestaudio/best",
                 "outtmpl": "downloads/%(id)s.%(ext)s",
-                "cookiefile": cookie_path, # ဖန်တီးထားတဲ့ file ကို သုံးမယ်
+                "cookiefile": cookie_path,
                 "quiet": True,
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -33,8 +51,8 @@ class YouTubeAPI:
             downloaded_file = await loop.run_in_executor(None, direct_download)
             return downloaded_file, False
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Download Error: {e}")
             return None, False
         finally:
             if os.path.exists(cookie_path):
-                os.remove(cookie_path) # အလုပ်ပြီးရင် ဖိုင်ကို ဖျက်ပေးမယ်
+                os.remove(cookie_path)
