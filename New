@@ -1,79 +1,40 @@
-import asyncio, httpx, os, random, yt_dlp
+import asyncio, os, yt_dlp
 from typing import Union
-from pyrogram.types import Message
-from pyrogram.enums import MessageEntityType
-from youtubesearchpython.__future__ import VideosSearch
 
-# --- API နဲ့ Cookie လမ်းကြောင်းများကို ဒီမှာ အသေထည့်ထားပါ ---
-API_URL = "http://80.211.130.157:1470"
-API_KEY = "SANATANI_TECH"
-# Cookies ဖိုင်ရှိမည့် နေရာကို သတ်မှတ်ခြင်း (root/cookies/cookies.txt)
-COOKIE_PATH = "cookies/cookies.txt"
-# --------------------------------------------------------
-
-def get_cookie_file():
-    return COOKIE_PATH if os.path.exists(COOKIE_PATH) else None
-
-async def get_stream_url_from_api(query, video=False):
-    try:
-        endpoint = "/video" if video else "/audio"
-        api_url = f"{API_URL}{endpoint}"
-        params = {"url": query, "api_key": API_KEY}
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(api_url, params=params)
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("result", {}).get("url") if data.get("status") else None
-    except Exception as e:
-        print(f"API ခေါ်ယူခြင်း အဆင်မပြေပါ: {e}")
-    return None
-
-async def download_with_cookies(link, video=False):
-    cookie_file = get_cookie_file()
-    if not cookie_file: 
-        print("Error: cookies.txt ဖိုင်ကို မတွေ့ရှိပါ။")
-        return None
-    
-    loop = asyncio.get_running_loop()
-    def ytdlp_download():
-        ydl_opts = {
-            "format": "bestvideo+bestaudio/best" if video else "bestaudio/best",
-            "outtmpl": "downloads/%(id)s.%(ext)s",
-            "cookiefile": cookie_file,
-            "quiet": True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(link, download=True)
-            return os.path.join("downloads", f"{info['id']}.{info['ext']}")
-    
-    return await loop.run_in_executor(None, ytdlp_download)
+# --- ဒီနေရာမှာ သင့်ရဲ့ Cookies စာသား အရှည်ကြီးကို ထည့်ပါ ---
+MY_COOKIES_TEXT = """
+# Netscape HTTP Cookie File
+.youtube.com	TRUE	/	TRUE	1749876543	... (သင့် cookies စာသားများကို ဒီမှာ ကူးထည့်ပါ)
+"""
+# ----------------------------------------------------
 
 class YouTubeAPI:
-    def __init__(self):
-        self.base = "https://www.youtube.com/watch?v="
-
-    async def url(self, message_1: Message) -> Union[str, None]:
-        messages = [message_1]
-        if message_1.reply_to_message: messages.append(message_1.reply_to_message)
-        for message in messages:
-            if message.entities:
-                for entity in message.entities:
-                    if entity.type == MessageEntityType.URL:
-                        return (message.text or message.caption)[entity.offset : entity.offset + entity.length]
-        return None
+    # ... (အခြား method များ) ...
 
     async def download(self, link, mystic, video=None, **kwargs) -> str:
-        # ၁။ API နဲ့ ကြိုးစား
-        downloaded_file = await get_stream_url_from_api(link, video)
-        
-        # ၂။ API မရရင် Cookies နဲ့ ကြိုးစား
-        if not downloaded_file:
-            print("API အဆင်မပြေပါ၊ Cookies သုံး၍ ကြိုးစားနေသည်...")
-            downloaded_file = await download_with_cookies(link, video)
-        
-        # ၃။ လုံးဝမရရင် Error ထုတ်
-        if not downloaded_file:
-            print("Download ပြုလုပ်ရန် လမ်းကြောင်းအားလုံး ချို့ယွင်းနေပါသည်။")
+        # Code ထဲက Cookies ကို Temporary file အဖြစ် ခဏဖန်တီးမယ်
+        cookie_path = "cookies_temp.txt"
+        with open(cookie_path, "w") as f:
+            f.write(MY_COOKIES_TEXT)
+
+        loop = asyncio.get_running_loop()
+        def direct_download():
+            ydl_opts = {
+                "format": "bestvideo+bestaudio/best" if video else "bestaudio/best",
+                "outtmpl": "downloads/%(id)s.%(ext)s",
+                "cookiefile": cookie_path, # ဖန်တီးထားတဲ့ file ကို သုံးမယ်
+                "quiet": True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(link, download=True)
+                return os.path.join("downloads", f"{info['id']}.{info['ext']}")
+
+        try:
+            downloaded_file = await loop.run_in_executor(None, direct_download)
+            return downloaded_file, False
+        except Exception as e:
+            print(f"Error: {e}")
             return None, False
-            
-        return downloaded_file, True
+        finally:
+            if os.path.exists(cookie_path):
+                os.remove(cookie_path) # အလုပ်ပြီးရင် ဖိုင်ကို ဖျက်ပေးမယ်
