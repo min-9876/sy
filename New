@@ -1,21 +1,24 @@
 import asyncio, httpx, os, random, yt_dlp
-import config
 from typing import Union
 from pyrogram.types import Message
 from pyrogram.enums import MessageEntityType
 from youtubesearchpython.__future__ import VideosSearch
 
-def cookie_txt_file():
-    cookie_dir = "cookies"
-    if not os.path.exists(cookie_dir): return None
-    cookies_files = [f for f in os.listdir(cookie_dir) if f.endswith(".txt")]
-    return os.path.join(cookie_dir, random.choice(cookies_files)) if cookies_files else None
+# --- API နဲ့ Cookie လမ်းကြောင်းများကို ဒီမှာ အသေထည့်ထားပါ ---
+API_URL = "http://80.211.130.157:1470"
+API_KEY = "SANATANI_TECH"
+# Cookies ဖိုင်ရှိမည့် နေရာကို သတ်မှတ်ခြင်း (root/cookies/cookies.txt)
+COOKIE_PATH = "cookies/cookies.txt"
+# --------------------------------------------------------
+
+def get_cookie_file():
+    return COOKIE_PATH if os.path.exists(COOKIE_PATH) else None
 
 async def get_stream_url_from_api(query, video=False):
     try:
         endpoint = "/video" if video else "/audio"
-        api_url = f"{config.API_URL}{endpoint}"
-        params = {"url": query, "api_key": config.API_KEY}
+        api_url = f"{API_URL}{endpoint}"
+        params = {"url": query, "api_key": API_KEY}
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(api_url, params=params)
             if response.status_code == 200:
@@ -26,8 +29,10 @@ async def get_stream_url_from_api(query, video=False):
     return None
 
 async def download_with_cookies(link, video=False):
-    cookie_file = cookie_txt_file()
-    if not cookie_file: return None
+    cookie_file = get_cookie_file()
+    if not cookie_file: 
+        print("Error: cookies.txt ဖိုင်ကို မတွေ့ရှိပါ။")
+        return None
     
     loop = asyncio.get_running_loop()
     def ytdlp_download():
